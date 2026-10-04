@@ -1,7 +1,12 @@
 /* TayeaLab — نظام معلومات المعامل | vanilla SPA + localStorage */
 'use strict';
-const KEY = 'tayealab_v2';
+const KEY = 'tayealab_v2'; // legacy single-lab store (migrated)
+const META_KEY = 'tayealab_meta_v1';
 const SES = 'tayealab_ses';
+const labKey = id => 'tayealab_lab_' + id;
+const actKey = id => 'tayealab_act_' + id;
+let META = null;   // { superUser:{user,pass}, labs:[{id,name,code,active,createdAt}] }
+let LABID = null;  // current lab id (null for super session)
 
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
@@ -58,11 +63,31 @@ function seed() {
   };
 }
 let DB = null;
-function load() {
-  try { DB = JSON.parse(localStorage.getItem(KEY)); } catch (e) { DB = null; }
+function loadMeta() {
+  try { META = JSON.parse(localStorage.getItem(META_KEY)); } catch (e) { META = null; }
+  if (!META || !META.labs) {
+    META = { superUser: { user: 'mt', pass: 'mozo' }, labs: [] };
+    // migrate legacy single-lab store into a first lab
+    let old = null;
+    try { old = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+    if (old && old.tests) {
+      const id = 'lab_main';
+      META.labs.push({ id, name: old.lab?.name || 'معملك الأول', code: mkCode(), active: true, createdAt: today() });
+      localStorage.setItem(labKey(id), JSON.stringify(old));
+    }
+    saveMeta();
+  }
+}
+function saveMeta() { localStorage.setItem(META_KEY, JSON.stringify(META)); }
+function loadLab(id) {
+  LABID = id;
+  try { DB = JSON.parse(localStorage.getItem(labKey(id))); } catch (e) { DB = null; }
   if (!DB || !DB.tests) { DB = seed(); save(); }
 }
-function save() { localStorage.setItem(KEY, JSON.stringify(DB)); }
+function save() { if (LABID) localStorage.setItem(labKey(LABID), JSON.stringify(DB)); }
+function labById(id) { return META.labs.find(l => l.id === id); }
+function isActivated(id) { return localStorage.getItem(actKey(id)) === '1'; }
+function activate(id) { localStorage.setItem(actKey(id), '1'); }
 function resetDB() { if (confirm('هتمسح كل البيانات وترجع البيانات التجريبية. متأكد؟')) { DB = seed(); save(); location.reload(); } }
 
 const testById = id => DB.tests.find(t => t.id === id);
@@ -86,7 +111,14 @@ function go(path) { location.hash = '#/' + path; }
 function route() {
   const h = location.hash.replace(/^#\//, '');
   const ses = session();
-  if (!ses) return renderLogin();
+  if (!ses) { LABID = null; return renderLogin(); }
+  if (ses.type === 'super') {
+    const [page] = h.split('/');
+    if (page === 'settings') return renderSettings();
+    return renderDistributor();
+  }
+  // lab session: ensure its DB is loaded
+  if (LABID !== ses.labId) loadLab(ses.labId);
   const [page, arg] = h.split('/');
   if (!page || page === 'home') return renderHome();
   if (page === 'reception') return renderReception();
@@ -109,7 +141,7 @@ function shell(title, bodyHtml, showBack = true) {
   const ses = session();
   $('#root').innerHTML = `
   <div class="topbar">
-    <img src="lis-assets/icon-192.png" alt="">
+    <img src="${DB.lab.logo || 'lis-assets/icon-192.png'}" alt="">
     <span class="t">TayeaLab</span>
     <span style="color:#8fa8d8;font-size:12.5px">${esc(DB.lab.name)} — ${esc(ses.branch)}</span>
     <span class="sp"></span>
@@ -132,26 +164,91 @@ function renderLogin() {
   $('#root').innerHTML = `
   <div id="login-view"><div class="login-box">
     <img src="lis-assets/logo.png" alt="TayeaLab">
-    <h1>${esc(DB.lab.name)}</h1>
+    <h1>نظام معلومات المعامل — TayeaLab</h1>
+    <div style="display:flex;gap:8px;margin-bottom:18px">
+      <button class="btn btn-p" style="width:auto;flex:1" id="tab-lab" onclick="loginTab('lab')">دخول معمل</button>
+      <button class="btn btn-o" style="width:auto;flex:1" id="tab-super" onclick="loginTab('super')">دخول الموزّع</button>
+    </div>
+    <div id="login-body"></div>
+  </div></div>`;
+  loginTab('lab');
+}
+let loginMode = 'lab';
+function loginTab(mode) {
+  loginMode = mode;
+  $('#tab-lab').className = 'btn ' + (mode === 'lab' ? 'btn-p' : 'btn-o');
+  $('#tab-super').className = 'btn ' + (mode === 'super' ? 'btn-p' : 'btn-o');
+  $('#login-body').innerHTML = mode === 'super' ? `
     <div id="login-err"></div>
-    <div class="field"><label>فرع تسجيل الدخول</label>
-      <select id="lg-branch">${DB.lab.branches.map(b => `<option>${esc(b)}</option>`).join('')}</select></div>
+    <div class="field"><label>اسم مستخدم الموزّع</label><input id="lg-user" autocomplete="off"></div>
+    <div class="field"><label>كلمة المرور</label><input id="lg-pass" type="password"></div>
+    <button class="btn btn-p" onclick="doLogin()">دخول لوحة الموزّع</button>
+    <div class="hint">حساب الموزّع: mt / mozo</div>` : labLoginHtml();
+  const p = $('#lg-pass'); if (p) p.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+}
+function labLoginHtml() {
+  const labs = META.labs.filter(l => l.active);
+  const sel = $('#login-lab')?.value || '';
+  return `
+    <div id="login-err"></div>
+    <div class="field"><label>المعمل</label>
+      <select id="login-lab" onchange="labLoginRefresh()">
+        <option value="">— اختر المعمل —</option>
+        ${META.labs.map(l => `<option value="${l.id}" ${!l.active ? 'disabled' : ''} ${l.id === sel ? 'selected' : ''}>${esc(l.name)}${l.active ? '' : ' (موقوف)'}</option>`).join('')}
+      </select></div>
+    <div id="lab-login-step">${labLoginStepHtml(sel)}</div>`;
+}
+function labLoginRefresh() { $('#lab-login-step').innerHTML = labLoginStepHtml($('#login-lab').value); const p = $('#lg-pass'); if (p) p.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); }); }
+function labLoginStepHtml(labId) {
+  if (!labId) return '';
+  const lab = labById(labId);
+  const logoImg = DB && LABID === labId && DB.lab.logo ? DB.lab.logo : null;
+  if (!isActivated(labId)) return `
+    <div class="card" style="padding:14px;margin-bottom:14px;background:#fff8ec;border-color:#f0d9a0">
+      <b style="color:var(--amber)">🔑 أول استخدام على هذا الجهاز</b>
+      <div style="font-size:13px;color:var(--mut);margin:6px 0">أدخل كود التفعيل الخاص بمعمل <b>${esc(lab.name)}</b> — مرة واحدة فقط.</div>
+      <div class="field" style="margin:0"><input id="lg-code" placeholder="كود التفعيل (xxxx-xxxx)" style="text-align:center;letter-spacing:2px" class="num"></div>
+      <button class="btn btn-g" style="width:100%" onclick="doActivate()">تفعيل الجهاز</button>
+    </div>`;
+  return `
+    <div class="field"><label>فرع تسجيل الدخول</label><select id="lg-branch">${(labBranches(labId)).map(b => `<option>${esc(b)}</option>`).join('')}</select></div>
     <div class="field"><label>اسم المستخدم</label><input id="lg-user" autocomplete="off"></div>
     <div class="field"><label>كلمة المرور</label><input id="lg-pass" type="password"></div>
     <button class="btn btn-p" onclick="doLogin()">تسجيل الدخول</button>
-    <div class="hint">للتجربة: mt / mozo</div>
-  </div></div>`;
-  $('#lg-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+    <div class="hint">جرب: ahmed / 123456</div>`;
+}
+function labBranches(labId) {
+  try { const d = JSON.parse(localStorage.getItem(labKey(labId))); if (d?.lab?.branches) return d.lab.branches; } catch (e) {}
+  return ['الفرع الرئيسي'];
+}
+function doActivate() {
+  const labId = $('#login-lab').value;
+  const lab = labById(labId);
+  const code = ($('#lg-code')?.value || '').trim().toLowerCase();
+  if (code && code === String(lab.code).toLowerCase()) {
+    activate(labId); toast('✅ تم تفعيل الجهاز'); labLoginRefresh();
+  } else $('#login-err').innerHTML = '<div class="err">كود التفعيل غير صحيح — تواصل مع الموزّع</div>';
 }
 function doLogin() {
+  if (loginMode === 'super') {
+    const u = $('#lg-user').value.trim(), p = $('#lg-pass').value;
+    if (u === META.superUser.user && p === META.superUser.pass) {
+      setSession({ type: 'super', name: 'الموزّع', role: 'موزّع', user: u });
+      go('distributor'); route();
+    } else $('#login-err').innerHTML = '<div class="err">بيانات الموزّع غير صحيحة</div>';
+    return;
+  }
+  const labId = $('#login-lab').value;
+  if (!labId) { $('#login-err').innerHTML = '<div class="err">اختر المعمل أولًا</div>'; return; }
+  if (!isActivated(labId)) { $('#login-err').innerHTML = '<div class="err">فعّل الجهاز بكود التفعيل أولًا</div>'; return; }
   const u = $('#lg-user').value.trim(), p = $('#lg-pass').value;
+  loadLab(labId);
   const usr = DB.users.find(x => x.user === u && x.pass === p);
   if (!usr) { $('#login-err').innerHTML = '<div class="err">اسم المستخدم أو كلمة المرور غير صحيحة</div>'; return; }
-  setSession({ name: usr.name, role: usr.role, user: usr.user, branch: $('#lg-branch').value });
+  setSession({ type: 'lab', labId, name: usr.name, role: usr.role, user: usr.user, branch: $('#lg-branch').value });
   go('home'); route();
 }
 
-/* ---------- home ---------- */
 function renderHome() {
   const ses = session();
   const tiles = [
@@ -178,7 +275,7 @@ function renderHome() {
   </div>
   <div id="view">
     <div class="lab-head">
-      <img src="lis-assets/logo.png" alt="">
+      <img src="${DB.lab.logo || 'lis-assets/logo.png'}" alt="">
       <div>
         <div class="n">${esc(DB.lab.name)}</div>
         <div class="b">${esc(ses.branch)}</div>
@@ -662,7 +759,19 @@ function miniVisitsTable(vs) {
 /* ================= SETTINGS ================= */
 function renderSettings() {
   shell('الإعدادات', `
-  <div class="card"><h3>بيانات المعمل</h3>
+  <div class="card"><h3>بيانات المعمل وهويته</h3>
+    <div style="display:flex;gap:20px;align-items:center;margin-bottom:16px">
+      <img id="st-logo-preview" src="${DB.lab.logo || 'lis-assets/logo.png'}" style="width:84px;height:84px;object-fit:contain;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:6px">
+      <div>
+        <b>شعار المعمل</b>
+        <div style="font-size:12.5px;color:var(--mut);margin:4px 0">بيظهر في صفحة الدخول والشريط العلوي والتقارير المطبوعة</div>
+        <input type="file" accept="image/*" id="st-logo-file" style="display:none" onchange="stLogoFile(this)">
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-o btn-s" onclick="$('#st-logo-file').click()">⬆️ رفع شعار</button>
+          ${DB.lab.logo ? '<button class="btn btn-red btn-s" onclick="stLogoClear()">إزالة الشعار</button>' : ''}
+        </div>
+      </div>
+    </div>
     <div class="grid2">
       <div class="field"><label>اسم المعمل</label><input id="st-name" value="${esc(DB.lab.name)}"></div>
       <div class="field"><label>الفروع (افصل بفاصلة)</label><input id="st-branches" value="${esc(DB.lab.branches.join('، '))}"></div>
@@ -681,8 +790,23 @@ function renderSettings() {
 function stSave() {
   DB.lab.name = $('#st-name').value.trim() || DB.lab.name;
   DB.lab.branches = $('#st-branches').value.split(/[،,]/).map(s => s.trim()).filter(Boolean);
+  const lab = labById(LABID);
+  if (lab) { lab.name = DB.lab.name; saveMeta(); }
   save(); toast('✅ تم الحفظ'); route();
 }
+function stLogoFile(inp) {
+  const f = inp.files[0]; if (!f) return;
+  if (f.size > 400 * 1024) { toast('⚠️ حجم الشعار كبير — اختر صورة أقل من 400KB'); return; }
+  const r = new FileReader();
+  r.onload = () => {
+    DB.lab.logo = r.result; save();
+    const lab = labById(LABID);
+    if (lab) { /* name unchanged */ }
+    toast('✅ تم تحديث الشعار'); renderSettings();
+  };
+  r.readAsDataURL(f);
+}
+function stLogoClear() { delete DB.lab.logo; save(); toast('تمت إزالة الشعار'); renderSettings(); }
 function backup() {
   const blob = new Blob([JSON.stringify(DB)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -697,13 +821,126 @@ function restoreFile(inp) {
   r.readAsText(f);
 }
 
+
+/* ================= DISTRIBUTOR PANEL ================= */
+function mkCode() {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const s = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return s.slice(0, 4) + '-' + s.slice(4);
+}
+function renderDistributor() {
+  const labs = META.labs;
+  $('#root').innerHTML = `
+  <div class="topbar">
+    <img src="lis-assets/icon-192.png" alt="">
+    <span class="t">TayeaLab — لوحة الموزّع</span>
+    <span style="color:#8fa8d8;font-size:12.5px">توزيع البرنامج على المعامل</span>
+    <span class="sp"></span>
+    <span class="who">الموزّع العام</span>
+    <button class="icon-btn" onclick="logout()" title="خروج">⏻</button>
+  </div>
+  <div id="view">
+    <div class="stats">
+      <div class="stat blue"><div class="v">${labs.length}</div><div class="l">إجمالي المعامل</div></div>
+      <div class="stat green"><div class="v">${labs.filter(l => l.active).length}</div><div class="l">معامل نشطة</div></div>
+      <div class="stat"><div class="v">${labs.filter(l => !l.active).length}</div><div class="l">معامل موقوفة</div></div>
+    </div>
+    <div class="toolbar">
+      <input id="dl-name" placeholder="اسم المعمل الجديد…" style="flex:1">
+      <button class="btn btn-g" onclick="dlAdd()">+ إنشاء معمل + كود تفعيل</button>
+    </div>
+    <div class="card"><h3>المعامل المشتركة</h3>
+      ${labs.length ? `<table><tr><th>المعمل</th><th>كود التفعيل</th><th>الحالة</th><th>تاريخ الإنشاء</th><th>الأجهزة المفعلة (هذا المتصفح)</th><th></th></tr>
+      ${labs.map(l => `<tr>
+        <td><b>${esc(l.name)}</b></td>
+        <td><span class="num" style="background:#fff4dd;padding:4px 12px;border-radius:8px;font-weight:900;letter-spacing:1px">${esc(l.code)}</span></td>
+        <td>${l.active ? '<span class="pill p-done">نشط</span>' : '<span class="pill p-unpaid">موقوف</span>'}</td>
+        <td class="num">${l.createdAt}</td>
+        <td>${isActivated(l.id) ? '✔ مفعّل' : '—'}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-o btn-s" onclick="dlRename('${l.id}')">✏️ اسم</button>
+          <button class="btn btn-o btn-s" onclick="dlRecode('${l.id}')">🔄 كود جديد</button>
+          <button class="btn ${l.active ? 'btn-red' : 'btn-g'} btn-s" onclick="dlToggle('${l.id}')">${l.active ? 'إيقاف' : 'تشغيل'}</button>
+          <button class="btn btn-red btn-s" onclick="dlDel('${l.id}')">🗑️</button>
+        </td></tr>`).join('')}</table>` : '<div class="empty">لا توجد معامل بعد — أنشئ أول معمل من الأعلى</div>'}
+    </div>
+    <div class="card"><h3>حساب الموزّع</h3>
+      <div class="grid2">
+        <div class="field"><label>اسم المستخدم</label><input id="sp-user" value="${esc(META.superUser.user)}"></div>
+        <div class="field"><label>كلمة المرور</label><input id="sp-pass" value="${esc(META.superUser.pass)}"></div>
+      </div>
+      <button class="btn btn-p" onclick="spSave()">💾 حفظ بيانات الموزّع</button>
+    </div>
+    <div class="card"><h3>نسخ احتياطي شامل (كل المعامل)</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-o" onclick="backupAll()">⬇️ تنزيل كل البيانات</button>
+      </div>
+    </div>
+  </div>`;
+}
+function dlAdd() {
+  const name = $('#dl-name').value.trim();
+  if (!name) { toast('⚠️ اكتب اسم المعمل'); return; }
+  const id = uid('lab');
+  META.labs.unshift({ id, name, code: mkCode(), active: true, createdAt: today() });
+  const fresh = seed();
+  fresh.lab.name = name;
+  localStorage.setItem(labKey(id), JSON.stringify(fresh));
+  saveMeta(); renderDistributor();
+  toast('✅ تم إنشاء "' + name + '" — كود التفعيل ظاهر في الجدول');
+}
+function dlRename(id) {
+  const l = labById(id);
+  modal(`<h3>تغيير اسم المعمل</h3>
+    <div class="field"><input id="dl-rn" value="${esc(l.name)}"></div>
+    <div class="modal-actions"><button class="btn btn-p" onclick="dlRenameSave('${id}')">💾 حفظ</button>
+    <button class="btn btn-o" onclick="closeModal()">إلغاء</button></div>`);
+}
+function dlRenameSave(id) {
+  const l = labById(id);
+  l.name = $('#dl-rn').value.trim() || l.name;
+  try { const d = JSON.parse(localStorage.getItem(labKey(id))); if (d?.lab) { d.lab.name = l.name; localStorage.setItem(labKey(id), JSON.stringify(d)); } } catch (e) {}
+  saveMeta(); closeModal(); renderDistributor(); toast('✅ تم التحديث');
+}
+function dlRecode(id) {
+  const l = labById(id);
+  l.code = mkCode(); saveMeta(); renderDistributor();
+  toast('🔄 كود جديد لـ ' + l.name + ': ' + l.code);
+}
+function dlToggle(id) {
+  const l = labById(id); l.active = !l.active; saveMeta(); renderDistributor();
+  toast(l.active ? '▶ تم تشغيل ' + l.name : '⏸ تم إيقاف ' + l.name);
+}
+function dlDel(id) {
+  const l = labById(id);
+  if (!confirm(`حذف معمل "${l.name}" وكل بياناته نهائيًا؟`)) return;
+  META.labs = META.labs.filter(x => x.id !== id);
+  localStorage.removeItem(labKey(id));
+  localStorage.removeItem(actKey(id));
+  saveMeta(); renderDistributor(); toast('🗑️ تم الحذف');
+}
+function spSave() {
+  const u = $('#sp-user').value.trim(), p = $('#sp-pass').value;
+  if (!u || !p) { toast('⚠️ أكمل البيانات'); return; }
+  META.superUser = { user: u, pass: p }; saveMeta(); toast('✅ تم حفظ حساب الموزّع');
+}
+function backupAll() {
+  const data = { meta: META, labs: {} };
+  META.labs.forEach(l => { const d = localStorage.getItem(labKey(l.id)); if (d) data.labs[l.id] = JSON.parse(d); });
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `tayealab-all-labs-${today()}.json`;
+  a.click();
+}
+
 /* ================= PRINTING ================= */
 function printInvoice(visitId) {
   const v = DB.visits.find(x => x.id === visitId); if (!v) return;
   const p = patById(v.patientId);
   printWin(`فاتورة رقم ${v.invoiceNo}`, `
   <div style="text-align:center;margin-bottom:14px">
-    <img src="lis-assets/logo.png" style="width:130px">
+    <img src="${DB.lab.logo || 'lis-assets/logo.png'}" style="width:130px">
     <h2 style="margin:4px 0">${esc(DB.lab.name)}</h2>
     <div>${esc(session()?.branch || '')}</div>
     <h3>فاتورة رقم <span class="num">${v.invoiceNo}</span> — ${v.date}</h3>
@@ -725,7 +962,7 @@ function printResult(visitId) {
   const p = patById(v.patientId);
   printWin(`نتيجة ${p?.name}`, `
   <div style="text-align:center;margin-bottom:12px">
-    <img src="lis-assets/logo.png" style="width:110px">
+    <img src="${DB.lab.logo || 'lis-assets/logo.png'}" style="width:110px">
     <h2 style="margin:4px 0">${esc(DB.lab.name)}</h2>
     <div>تقرير نتائج تحاليل — ${v.date}</div>
   </div>
@@ -774,7 +1011,7 @@ function modal(html) {
 function closeModal() { $('#modal-wrap')?.remove(); }
 
 /* ================= boot ================= */
-load();
+loadMeta();
 window.addEventListener('DOMContentLoaded', route);
 if (document.readyState !== 'loading') route();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
