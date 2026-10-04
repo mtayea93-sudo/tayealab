@@ -1,5 +1,5 @@
-/* TayeaLIS — SW v1 */
-const CACHE = 'tayealis-v1';
+/* TayeaLab — SW v1 */
+const CACHE = 'tayealab-v1';
 const ASSETS = ['.', 'index.html', 'app.js', 'manifest.json', 'lis-assets/logo.png', 'lis-assets/icon-192.png', 'lis-assets/icon-512.png'];
 
 self.addEventListener('install', e => {

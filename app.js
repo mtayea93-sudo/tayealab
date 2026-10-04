@@ -1,4 +1,4 @@
-/* TayeaLIS — نظام معلومات المعامل | vanilla SPA + localStorage */
+/* TayeaLab — نظام معلومات المعامل | vanilla SPA + localStorage */
 'use strict';
 const KEY = 'tayealab_v2';
 const SES = 'tayealab_ses';
@@ -52,7 +52,7 @@ function seed() {
       tests: testIds.map(tid => ({ testId: tid, status: 'pending', results: {} })) };
   }
   return {
-    lab: { name: 'معمل د محمد تايعة للتحاليل الطبية', branch: 'الفرع الرئيسي', branches: ['الفرع الرئيسي', 'فرع دكرنس'], footer: 'TayeaLIS' },
+    lab: { name: 'معمل د محمد تايعة للتحاليل الطبية', branch: 'الفرع الرئيسي', branches: ['الفرع الرئيسي', 'فرع دكرنس'], footer: 'TayeaLab' },
     tests, users, patients, visits,
     seq: { patient: 4, visit: 1003, invoice: 5003 },
   };
@@ -110,7 +110,7 @@ function shell(title, bodyHtml, showBack = true) {
   $('#root').innerHTML = `
   <div class="topbar">
     <img src="lis-assets/icon-192.png" alt="">
-    <span class="t">TayeaLIS</span>
+    <span class="t">TayeaLab</span>
     <span style="color:#8fa8d8;font-size:12.5px">${esc(DB.lab.name)} — ${esc(ses.branch)}</span>
     <span class="sp"></span>
     <span class="who">${esc(ses.name)} (${esc(ses.role)})</span>
@@ -131,7 +131,7 @@ function logout() { sessionStorage.removeItem(SES); go(''); route(); }
 function renderLogin() {
   $('#root').innerHTML = `
   <div id="login-view"><div class="login-box">
-    <img src="lis-assets/logo.png" alt="TayeaLIS">
+    <img src="lis-assets/logo.png" alt="TayeaLab">
     <h1>${esc(DB.lab.name)}</h1>
     <div id="login-err"></div>
     <div class="field"><label>فرع تسجيل الدخول</label>
@@ -171,7 +171,7 @@ function renderHome() {
   $('#root').innerHTML = `
   <div class="topbar">
     <img src="lis-assets/icon-192.png" alt="">
-    <span class="t">TayeaLIS</span>
+    <span class="t">TayeaLab</span>
     <span class="sp"></span>
     <span class="who">${esc(ses.name)} (${esc(ses.role)})</span>
     <button class="icon-btn" onclick="logout()" title="خروج">⏻</button>
@@ -746,7 +746,7 @@ function printResult(visitId) {
       }).join('')}
     </table>
     ${t.comment ? `<div style="font-size:13px;margin-top:4px"><b>تعليق:</b> ${esc(t.comment)}</div>` : ''}`; }).join('')}
-  <div style="margin-top:20px;text-align:center;font-size:12px;color:#666">تمت الطباعة باستخدام TayeaLIS — ${now()}</div>`);
+  <div style="margin-top:20px;text-align:center;font-size:12px;color:#666">تمت الطباعة باستخدام TayeaLab — ${now()}</div>`);
 }
 function printWin(title, bodyHtml) {
   const w = window.open('', '_blank', 'width=800,height=900');

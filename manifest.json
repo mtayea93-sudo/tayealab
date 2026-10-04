@@ -1,6 +1,6 @@
 {
-  "name": "TayeaLIS",
-  "short_name": "TayeaLIS",
+  "name": "TayeaLab",
+  "short_name": "TayeaLab",
   "description": "نظام معلومات المعامل — تسجيل الحالات وإدخال النتائج",
   "start_url": ".",
   "display": "standalone",
@@ -9,7 +9,15 @@
   "lang": "ar",
   "dir": "rtl",
   "icons": [
-    { "src": "lis-assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "lis-assets/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "lis-assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "lis-assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
   ]
 }
