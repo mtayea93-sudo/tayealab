@@ -49,7 +49,7 @@
     const at = new Date().toISOString();
     CLOUD.lastLabPush = at;
     CLOUD.lastLabApplied = payload;
-    const req = CLOUD.db.collection('tayealab').doc(LABID).set({ data: JSON.parse(payload), updatedAt: at });
+    const req = CLOUD.db.collection('tayealab').doc(LABID).set({ dataJson: payload, updatedAt: at });
     const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000));
     Promise.race([req, timeout])
       .then(() => updateSyncBadge('ok', '☁️ متزامن مع السحابة'))
@@ -63,7 +63,7 @@
     const at = new Date().toISOString();
     CLOUD.lastMetaPush = at;
     CLOUD.lastMetaApplied = payload;
-    CLOUD.db.collection('tayealab').doc('_meta').set({ data: JSON.parse(payload), updatedAt: at }).catch(e => console.error('Meta push:', e));
+    CLOUD.db.collection('tayealab').doc('_meta').set({ dataJson: payload, updatedAt: at }).catch(e => console.error('Meta push:', e));
   }
 
   window.cloudSchedulePush = function () {
@@ -83,11 +83,12 @@
     CLOUD.db.collection('tayealab').doc(labId).get().then(snap => {
       if (!snap.exists) { cloudPushLab(); return; } // السحابة فاضية → ارفع المحلي
       const remote = snap.data();
+      const remoteData = remote.dataJson ? JSON.parse(remote.dataJson) : remote.data;
       const localRaw = localStorage.getItem(labKey(labId));
       const local = localRaw ? JSON.parse(localRaw) : null;
       if (!local) {
         // مفيش محلي → نزّل من السحابة
-        LABID = labId; DB = remote.data;
+        LABID = labId; DB = remoteData;
         localStorage.setItem(labKey(labId), JSON.stringify(DB));
         route();
       }
@@ -104,11 +105,12 @@
         if (!snap.exists) return;
         const remote = snap.data();
         if (remote.updatedAt === CLOUD.lastLabPush) return; // كتابتنا احنا
+        const remoteData = remote.dataJson ? JSON.parse(remote.dataJson) : remote.data;
         const localRaw = localStorage.getItem(labKey(labId));
         const local = localRaw ? JSON.parse(localRaw) : null;
-        if (!local || JSON.stringify(local) !== JSON.stringify(remote.data)) {
-          CLOUD.lastLabApplied = JSON.stringify(remote.data);
-          DB = remote.data;
+        if (!local || JSON.stringify(local) !== JSON.stringify(remoteData)) {
+          CLOUD.lastLabApplied = JSON.stringify(remoteData);
+          DB = remoteData;
           localStorage.setItem(labKey(labId), JSON.stringify(DB));
           if (session() && session().labId === labId) {
             updateSyncBadge('ok', '☁️ اتحدّث من جهاز آخر');
@@ -125,9 +127,10 @@
       if (!snap.exists) { cloudPushMeta(); return; }
       const remote = snap.data();
       if (remote.updatedAt === CLOUD.lastMetaPush) return;
-      if (JSON.stringify(remote.data) !== JSON.stringify(META)) {
-        CLOUD.lastMetaApplied = JSON.stringify(remote.data);
-        META = remote.data;
+      const remoteData = remote.dataJson ? JSON.parse(remote.dataJson) : remote.data;
+      if (JSON.stringify(remoteData) !== JSON.stringify(META)) {
+        CLOUD.lastMetaApplied = JSON.stringify(remoteData);
+        META = remoteData;
         saveMeta();
         if (session() && session().type === 'super') route();
       }
@@ -136,9 +139,10 @@
         if (!s.exists) return;
         const r = s.data();
         if (r.updatedAt === CLOUD.lastMetaPush) return;
-        if (JSON.stringify(r.data) !== JSON.stringify(META)) {
-          CLOUD.lastMetaApplied = JSON.stringify(r.data);
-          META = r.data; saveMeta();
+        const rData = r.dataJson ? JSON.parse(r.dataJson) : r.data;
+        if (JSON.stringify(rData) !== JSON.stringify(META)) {
+          CLOUD.lastMetaApplied = JSON.stringify(rData);
+          META = rData; saveMeta();
           if (session() && session().type === 'super') route();
         }
       }, () => {});
