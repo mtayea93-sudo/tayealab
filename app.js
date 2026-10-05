@@ -133,6 +133,7 @@ function route() {
   if (page === 'samples') return renderSamples();
   if (page === 'prices') return renderPrices();
   if (page === 'finance') return renderFinance();
+  if (page === 'treasury') return renderTreasury();
   if (page === 'worklist') return renderWorklist();
   if (page === 'outbound') return renderOutbound();
   if (page === 'reports') return renderReports();
@@ -265,7 +266,7 @@ function renderHome() {
     ['samples', 'تتبع العينات', 'أين وصلت عينات كل زيارة؟', '🧪', '#cbb27a'],
     ['prices', 'قائمة الأسعار', 'أسعار التحاليل وباقاتها — قابلة للتعديل بالكامل', '🏷️', '#d9a86f'],
     ['finance', 'الفواتير والتحصيل', 'فواتير الزيارات وتحصيل المدفوعات', '📋', '#c2d98a'],
-    ['finance2', 'الخزينة', 'حركة النقدية ومصروفات الفرع', '💼', '#9fc7d9'],
+    ['treasury', 'الخزينة', 'بيان الوارد والمصروف اليومي والشهري والتقارير', '💼', '#9fc7d9'],
     ['worklist', 'قوائم العمل', 'طلبات مرتبة حسب القسم أو التاريخ', '📑', '#c39ad9'],
     ['outbound', 'عينات خارجية', 'العينات المحوّلة لمختبرات مرجعية', '📤', '#8ac9c2'],
     ['reports', 'التقارير', 'إحصائيات وملخصات جاهزة للطباعة', '📈', '#d97f7f'],
@@ -297,7 +298,7 @@ function renderHome() {
     </div>
   </div>`;
 }
-function goTile(t) { if (t === 'finance2') t = 'finance'; go(t); route(); }
+function goTile(t) { go(t); route(); }
 
 /* ================= RECEPTION ================= */
 let recState = { patientId: null, testIds: new Set() };
