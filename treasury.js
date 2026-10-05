@@ -74,12 +74,24 @@
         <button class="btn btn-o" style="width:auto" onclick="window.print()">🖨️ طباعة</button>
       </div>
 
+      <div class="trs-sub" style="border-right:4px solid #2e7d32;background:#f4faf6">
+        <h3 style="color:#2e7d32">🧾 وارد الفواتير المُحصّلة — تلقائي من الاستقبال</h3>
+        <div class="trs-row">
+          <div class="trs-f"><label>صباحي (قبل 2 ظهراً)</label><input type="number" id="tr-inv-m" value="0" readonly class="ro-green"></div>
+          <div class="trs-f"><label>مسائي (بعد 2 ظهراً)</label><input type="number" id="tr-inv-e" value="0" readonly class="ro-green"></div>
+          <div class="trs-f"><label>إجمالي وارد الفواتير</label><input type="number" id="tr-inv-t" value="0" readonly style="background:#c8e6c9;color:#1b5e20;font-weight:800"></div>
+          <div class="trs-f" style="flex:2;justify-content:center"><label>&nbsp;</label><div style="font-size:12.5px;color:#4b6355">أي فاتورة بتتدفع في صفحة الفواتير أو «حفظ + دفع» في الاستقبال بتتحسب هنا فوراً لنفس اليوم</div></div>
+        </div>
+      </div>
+
       <div class="trs-stats">
+        <div class="trs-stat"><div class="n" id="tr-st-inv" style="color:#2e7d32">0</div><div class="l">وارد الفواتير (تلقائي)</div></div>
         <div class="trs-stat"><div class="n" id="tr-st-p">0</div><div class="l">إجمالي البيشنت</div></div>
         <div class="trs-stat"><div class="n" id="tr-st-l">0</div><div class="l">إجمالي اللاب</div></div>
         <div class="trs-stat"><div class="n" id="tr-st-e">0</div><div class="l">مصاريف</div></div>
         <div class="trs-stat"><div class="n" id="tr-st-d">0</div><div class="l">إجمالي الخصومات</div></div>
         <div class="trs-stat"><div class="n" id="tr-st-b" style="color:#2e7d32">0</div><div class="l">الباقي الكلي</div></div>
+        <div class="trs-stat"><div class="n" id="tr-st-g" style="color:#1565C0">0</div><div class="l">إجمالي الوارد الكلي</div></div>
       </div>
 
       <div class="trs-cols">
@@ -219,7 +231,7 @@
           <thead><tr>
             <th>اليوم</th><th>بيشنت صباحي</th><th>بيشنت مسائي</th><th>بيشنت إجمالي</th>
             <th>لاب صباحي</th><th>لاب مسائي</th><th>لاب إجمالي</th>
-            <th>مصاريف</th><th>خصومات</th><th>باقي</th><th>إجراءات</th>
+            <th>فواتير محصّلة</th><th>مصاريف</th><th>خصومات</th><th>باقي</th><th>إجراءات</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -240,8 +252,21 @@
         <h4>📝 تقرير بيان المصاريف التفصيلية</h4>
         <div id="tr-rep-expenses"></div>
       </div>
+      <div class="trs-sub">
+        <h4>📒 حركة الخزينة — دفتر اليومية (وارد ومصروف وصافي كل يوم)</h4>
+        <div id="tr-rep-ledger"></div>
+      </div>
+      <div class="trs-sub">
+        <h4>💰 الأرباح الشهرية</h4>
+        <div class="trs-row" style="margin-bottom:10px">
+          <div class="trs-f" style="min-width:200px"><label>الشهر</label><input type="month" id="tr-month-pick" onchange="trRenderReports()"></div>
+        </div>
+        <div id="tr-rep-profit"></div>
+      </div>
     </div>`);
 
+    const mp = document.getElementById('tr-month-pick');
+    if (mp) mp.value = todayStr.slice(0, 7);
     trLoadDay();
     trRenderBalances();
   };
@@ -321,6 +346,8 @@
     set('tr-st-e', pExp + lExp);
     set('tr-st-d', disc);
     set('tr-st-b', bal);
+    const g = document.getElementById('tr-st-g');
+    if (g) g.textContent = (gv('tr-p-t') + gv('tr-l-total') + gv('tr-inv-t')).toLocaleString();
   }
 
   /* ---------- الخصومات ---------- */
@@ -473,6 +500,7 @@
       },
       basem: { inM: gv('tr-basem-inm'), inE: gv('tr-basem-ine'), inTotal: gv('tr-basem-intotal'), ratio: gv('tr-basem-ratio'), balance: gv('tr-basem-bal') },
       nonBasem: { m: gv('tr-nb-m'), e: gv('tr-nb-e'), total: gv('tr-nb-t') },
+      invoiceIncome: invoiceIncomeByShift(date),
       expenses: {},
       discounts: JSON.parse(JSON.stringify(trDiscounts)),
       expenseDetails: JSON.parse(JSON.stringify(trExpDetails))
@@ -485,9 +513,21 @@
     trRenderReports();
   };
 
+  window.trRefreshInv = function () {
+    const date = document.getElementById('tr-date').value;
+    if (!date) return;
+    const inv = invoiceIncomeByShift(date);
+    sv('tr-inv-m', inv.m); sv('tr-inv-e', inv.e); sv('tr-inv-t', inv.total);
+    const el = document.getElementById('tr-st-inv');
+    if (el) el.textContent = inv.total.toLocaleString();
+    const g = document.getElementById('tr-st-g');
+    if (g) g.textContent = (gv('tr-p-t') + gv('tr-l-total') + inv.total).toLocaleString();
+  };
+
   window.trLoadDay = function () {
     const date = document.getElementById('tr-date').value;
     if (!date) return;
+    trRefreshInv();
     const day = tdata().days[date];
     trDiscounts = [];
     trExpDetails = [];
@@ -548,6 +588,7 @@
         <td style="font-weight:700">${date}</td>
         <td>${d.patient.morning}</td><td>${d.patient.evening}</td><td><strong>${d.patient.total}</strong></td>
         <td>${d.lab.morning}</td><td>${d.lab.evening}</td><td><strong>${d.lab.total}</strong></td>
+        <td style="color:#2e7d32;font-weight:700">${d.invoiceIncome ? d.invoiceIncome.total : 0}</td>
         <td>${d.patient.expense + d.lab.expense}</td><td>${disc}</td>
         <td style="color:#2e7d32;font-weight:700">${totalBal}</td>
         <td>
@@ -561,7 +602,12 @@
   const fmtDate = ds => { const d = new Date(ds + 'T00:00:00'); return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`; };
 
   function trRenderReports() {
-    const data = tdata().days;
+    const data = Object.assign({}, tdata().days);
+    // دمج أيام فيها تحصيل فواتير حتى لو مفيش عليها بيان يدوي محفوظ
+    (DB.payments || []).forEach(p => {
+      if (!data[p.date]) data[p.date] = { date: p.date, patient: { total: 0 }, lab: { total: 0 }, expenses: {}, discounts: [], expenseDetails: [] };
+    });
+    const invOf = (date, d) => d.invoiceIncome || invoiceIncomeByShift(date);
     const dates = Object.keys(data).sort((a, b) => new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00'));
 
     // تقرير الوارد
@@ -570,17 +616,19 @@
       if (!dates.length) { inward.innerHTML = '<div class="trs-empty">لا توجد بيانات</div>'; }
       else {
         let grand = 0;
-        let html = `<table class="trs-t"><thead><tr><th>#</th><th>التاريخ</th><th>الصباحي</th><th>المسائي</th><th>إجمالي الوارد</th></tr></thead><tbody>`;
+        let html = `<table class="trs-t"><thead><tr><th>#</th><th>التاريخ</th><th>الصباحي</th><th>المسائي</th><th>إجمالي الوارد</th><th>الفواتير</th></tr></thead><tbody>`;
         dates.forEach((date, i) => {
           const d = data[date];
-          const morning = (d.patient.morning || 0) + (d.lab.patM || 0) + (d.lab.extM || 0);
-          const evening = (d.patient.evening || 0) + (d.lab.patE || 0) + (d.lab.extE || 0);
+          const inv = invOf(date, d);
+          const morning = (d.patient.morning || 0) + (d.lab.patM || 0) + (d.lab.extM || 0) + inv.m;
+          const evening = (d.patient.evening || 0) + (d.lab.patE || 0) + (d.lab.extE || 0) + inv.e;
           const total = morning + evening;
           grand += total;
           html += `<tr><td>${i + 1}</td><td style="font-weight:600">${fmtDate(date)}</td>
             <td style="color:#4caf50;font-weight:600">${morning.toFixed(2)} ج.م</td>
             <td style="color:#FF9800;font-weight:600">${evening.toFixed(2)} ج.م</td>
-            <td style="font-weight:700;color:#1565C0">${total.toFixed(2)} ج.م</td></tr>`;
+            <td style="font-weight:700;color:#1565C0">${total.toFixed(2)} ج.م</td>
+            <td style="color:#2e7d32;font-size:12px">منها فواتير: ${inv.total.toFixed(2)} ج.م</td></tr>`;
         });
         html += `<tr style="background:#e3f0ff;font-weight:800"><td colspan="4">إجمالي الوارد الكلي</td>
           <td style="font-weight:800;color:#1565C0">${grand.toFixed(2)} ج.م</td></tr></tbody></table>`;
@@ -631,6 +679,75 @@
         html += `<tr style="background:#ffebee;font-weight:800"><td colspan="4">إجمالي المصاريف</td>
           <td style="font-weight:800;color:#c62828">${total.toFixed(2)} ج.م</td></tr></tbody></table>`;
         exps.innerHTML = html;
+      }
+    }
+
+    // 📒 دفتر اليومية — حركة الخزينة
+    const led = document.getElementById('tr-rep-ledger');
+    if (led) {
+      if (!dates.length) { led.innerHTML = '<div class="trs-empty">لا توجد حركات مسجلة</div>'; }
+      else {
+        let balance = 0;
+        let tIn = 0, tOut = 0;
+        let html = `<table class="trs-t"><thead><tr><th>#</th><th>التاريخ</th><th>وارد يدوي</th><th>وارد فواتير</th><th>إجمالي الوارد</th><th>مصروفات</th><th>الصافي</th><th>الرصيد المتراكم</th></tr></thead><tbody>`;
+        dates.slice().reverse().forEach((date, i) => {
+          const d = data[date];
+          const inv = invOf(date, d);
+          const manual = (d.patient.total || 0) + (d.lab.total || 0);
+          const income = manual + inv.total;
+          const expFieldsSum = Object.values(d.expenses || {}).reduce((a, b) => a + (+b || 0), 0);
+          const expFree = (d.expenseDetails || []).reduce((a, e) => a + (parseFloat(e.amount) || 0), 0);
+          const out = expFieldsSum + expFree;
+          const net = income - out;
+          balance += net;
+          tIn += income; tOut += out;
+          html += `<tr><td>${i + 1}</td><td style="font-weight:600">${fmtDate(date)}</td>
+            <td>${manual.toFixed(2)}</td>
+            <td style="color:#2e7d32;font-weight:600">${inv.total.toFixed(2)}</td>
+            <td style="color:#1565C0;font-weight:700">${income.toFixed(2)}</td>
+            <td style="color:#c62828;font-weight:600">${out.toFixed(2)}</td>
+            <td style="font-weight:700;color:${net >= 0 ? '#2e7d32' : '#c62828'}">${net.toFixed(2)}</td>
+            <td style="font-weight:800">${balance.toFixed(2)}</td></tr>`;
+        });
+        html += `<tr style="background:#e3f0ff;font-weight:800"><td colspan="4">الإجمالي — وارد ${tIn.toFixed(2)} / مصروف ${tOut.toFixed(2)}</td>
+          <td style="color:#1565C0">${tIn.toFixed(2)}</td><td style="color:#c62828">${tOut.toFixed(2)}</td>
+          <td style="color:${tIn - tOut >= 0 ? '#2e7d32' : '#c62828'}">${(tIn - tOut).toFixed(2)}</td><td></td></tr></tbody></table>`;
+        led.innerHTML = html;
+      }
+    }
+
+    // 💰 الأرباح الشهرية
+    const prof = document.getElementById('tr-rep-profit');
+    if (prof) {
+      const mp = document.getElementById('tr-month-pick');
+      const month = mp && mp.value ? mp.value : dates.length ? dates[0].slice(0, 7) : '';
+      const monthDates = dates.filter(d => d.slice(0, 7) === month);
+      if (!monthDates.length) { prof.innerHTML = '<div class="trs-empty">لا توجد بيانات في هذا الشهر</div>'; }
+      else {
+        let tIn = 0, tOut = 0;
+        let html = `<table class="trs-t"><thead><tr><th>#</th><th>اليوم</th><th>وارد يدوي</th><th>وارد فواتير</th><th>إجمالي الوارد</th><th>مصروفات</th><th>صافي الربح</th></tr></thead><tbody>`;
+        monthDates.slice().reverse().forEach((date, i) => {
+          const d = data[date];
+          const inv = invOf(date, d);
+          const manual = (d.patient.total || 0) + (d.lab.total || 0);
+          const income = manual + inv.total;
+          const expFieldsSum = Object.values(d.expenses || {}).reduce((a, b) => a + (+b || 0), 0);
+          const expFree = (d.expenseDetails || []).reduce((a, e) => a + (parseFloat(e.amount) || 0), 0);
+          const out = expFieldsSum + expFree;
+          const net = income - out;
+          tIn += income; tOut += out;
+          html += `<tr><td>${i + 1}</td><td style="font-weight:600">${fmtDate(date)}</td>
+            <td>${manual.toFixed(2)}</td><td style="color:#2e7d32">${inv.total.toFixed(2)}</td>
+            <td style="color:#1565C0;font-weight:700">${income.toFixed(2)}</td>
+            <td style="color:#c62828">${out.toFixed(2)}</td>
+            <td style="font-weight:800;color:${net >= 0 ? '#2e7d32' : '#c62828'}">${net.toFixed(2)}</td></tr>`;
+        });
+        const net = tIn - tOut;
+        html += `<tr style="background:${net >= 0 ? '#e8f5e9' : '#ffebee'};font-weight:800">
+          <td colspan="4">إجمالي الشهر (${monthDates.length} يوم)</td>
+          <td style="color:#1565C0">${tIn.toFixed(2)} ج.م</td><td style="color:#c62828">${tOut.toFixed(2)} ج.م</td>
+          <td style="font-size:16px;color:${net >= 0 ? '#2e7d32' : '#c62828'}">${net.toFixed(2)} ج.م</td></tr></tbody></table>`;
+        prof.innerHTML = html;
       }
     }
   }
