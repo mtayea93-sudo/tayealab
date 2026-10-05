@@ -109,6 +109,28 @@ function visitStatus(v) {
   return 'pending';
 }
 
+/* ---------- دفتر تحصيل الفواتير (يرتبط بالخزينة تلقائياً) ---------- */
+function localToday() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function logPayment(v) {
+  DB.payments = DB.payments || [];
+  DB.payments.push({ id: uid('pay'), visitId: v.id, invoiceNo: v.invoiceNo,
+    patient: (patById(v.patientId) || {}).name || '', amount: visitTotal(v),
+    date: localToday(), at: new Date().toISOString() });
+}
+function invoiceIncome(date) {
+  return (DB.payments || []).filter(p => p.date === date).reduce((a, p) => a + p.amount, 0);
+}
+function invoiceIncomeByShift(date) {
+  let m = 0, e = 0;
+  (DB.payments || []).filter(p => p.date === date).forEach(p => {
+    if (new Date(p.at).getHours() < 14) m += p.amount; else e += p.amount;
+  });
+  return { m, e, total: m + e };
+}
+
 /* ---------- session ---------- */
 function session() { try { return JSON.parse(sessionStorage.getItem(SES)); } catch (e) { return null; } }
 function setSession(s) { sessionStorage.setItem(SES, JSON.stringify(s)); }
@@ -420,7 +442,9 @@ function recSave(paid, printIt) {
     discount: +$('#rec-disc').value || 0, paid: !!paid, notes: $('#rec-notes').value.trim(),
     tests: [...recState.testIds].map(tid => ({ testId: tid, status: 'pending', results: {} })),
   };
-  DB.visits.unshift(v); save();
+  DB.visits.unshift(v);
+  if (v.paid) logPayment(v);
+  save();
   toast('✅ تم حفظ الزيارة — فاتورة رقم ' + v.invoiceNo);
   if (printIt) printInvoice(v.id);
   recState = { patientId: null, testIds: new Set() };
@@ -623,8 +647,10 @@ function renderFinance() {
   </div>`);
 }
 function finPay(id) {
-  const v = DB.visits.find(x => x.id === id); v.paid = true; save();
-  toast('✅ تم تسجيل الدفع — فاتورة ' + v.invoiceNo); renderFinance();
+  const v = DB.visits.find(x => x.id === id);
+  if (!v.paid) { v.paid = true; logPayment(v); save(); }
+  toast('✅ تم تسجيل الدفع — فاتورة ' + v.invoiceNo + ' — اتسجلت في الخزينة');
+  renderFinance();
 }
 
 /* ================= WORKLIST ================= */
