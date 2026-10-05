@@ -85,13 +85,20 @@ function loadMeta() {
     saveMeta();
   }
 }
-function saveMeta() { localStorage.setItem(META_KEY, JSON.stringify(META)); }
+function saveMeta() {
+  localStorage.setItem(META_KEY, JSON.stringify(META));
+  if (typeof cloudScheduleMetaPush === 'function') cloudScheduleMetaPush();
+}
 function loadLab(id) {
   LABID = id;
   try { DB = JSON.parse(localStorage.getItem(labKey(id))); } catch (e) { DB = null; }
   if (!DB || !DB.tests) { DB = seed(); save(); }
+  if (typeof cloudPullLab === 'function') cloudPullLab(id);
 }
-function save() { if (LABID) localStorage.setItem(labKey(LABID), JSON.stringify(DB)); }
+function save() {
+  if (LABID) localStorage.setItem(labKey(LABID), JSON.stringify(DB));
+  if (typeof cloudSchedulePush === 'function') cloudSchedulePush();
+}
 function labById(id) { return META.labs.find(l => l.id === id); }
 function isActivated(id) { return localStorage.getItem(actKey(id)) === '1'; }
 function activate(id) { localStorage.setItem(actKey(id), '1'); }
@@ -165,6 +172,7 @@ function route() {
   renderHome();
 }
 window.addEventListener('hashchange', route);
+window.addEventListener('load', () => { loadMeta(); cloudInit(); cloudPullMeta(); });
 
 /* ---------- shell ---------- */
 function shell(title, bodyHtml, showBack = true) {
@@ -175,6 +183,7 @@ function shell(title, bodyHtml, showBack = true) {
     <span class="t">TayeaLab</span>
     <span style="color:#8fa8d8;font-size:12.5px">${esc(DB.lab.name)} — ${esc(ses.branch)}</span>
     <span class="sp"></span>
+    <span id="sync-badge" class="sync-badge off">…</span>
     <span class="who">${esc(ses.name)} (${esc(ses.role)})</span>
     <button class="icon-btn" onclick="go('home')" title="الرئيسية">🏠</button>
     <button class="icon-btn" onclick="logout()" title="خروج">⏻</button>
@@ -300,6 +309,7 @@ function renderHome() {
     <img src="lis-assets/icon-192.png" alt="">
     <span class="t">TayeaLab</span>
     <span class="sp"></span>
+    <span id="sync-badge" class="sync-badge off">…</span>
     <span class="who">${esc(ses.name)} (${esc(ses.role)})</span>
     <button class="icon-btn" onclick="logout()" title="خروج">⏻</button>
   </div>
