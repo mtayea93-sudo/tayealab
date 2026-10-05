@@ -37,6 +37,13 @@ function seed() {
     T('t_sfa', 'تحليل سائل منوي كامل — CASA', 'سائل منوي', 350, fields([['Volume','ml',1.5,''],['Concentration','M/ml',15,''],['Total Count','M',39,''],['Progressive Motility PR','%',32,''],['Total Motility','%',40,''],['Normal Morphology','%',4,''],['pH','',7.2,8]])),
     T('t_mar', 'مزرعة بول', 'مزارع', 150, fields([['Culture result','','', ''],['Sensitive','','', ''],['Resistant','','', '']])),
   ];
+  // ---- الكتالوج المستورد (أسماء/أسعار/مرجعية) ----
+  for (const r of (typeof YS_PANELS !== 'undefined' ? YS_PANELS : [])) {
+    tests.push(T('yp_' + tests.length, r.n, r.c, r.p, r.f || []));
+  }
+  for (const r of (typeof YS_TESTS !== 'undefined' ? YS_TESTS : [])) {
+    tests.push(T('yt_' + tests.length, r.n, r.c, r.p, r.f || []));
+  }
   const users = [
     { id: 'u1', name: 'Mhmd tayea', user: 'mt', pass: 'mozo', role: 'مدير' },
     { id: 'u2', name: 'أحمد السيد', user: 'ahmed', pass: '123456', role: 'أخصائي' },
@@ -252,18 +259,18 @@ function doLogin() {
 function renderHome() {
   const ses = session();
   const tiles = [
-    ['dashboard', 'لوحة التحكم', 'لمحات مجمّلة عن سير العمل في فرع المعمل', '📊', '#6fb7a5'],
-    ['users', 'المستخدمون', 'التحكم في حسابات المستخدمين وصلاحياتهم', '👤', '#d98a8a'],
-    ['reception', 'الاستقبال', 'بحث وإدخال بيانات المرضى والزيارات', '🧾', '#9aa7c7'],
-    ['results', 'النتائج', 'بحث وتتبع وإدخال النتائج', '📄', '#7aa7d9'],
-    ['samples', 'العينات', 'تتبع وبحث أحوال ومواضع العينات', '🧪', '#cbb27a'],
-    ['prices', 'الأسعار', 'بحث وتحرير خطط الأسعار', '🏷️', '#b5a89a'],
-    ['finance', 'المطالبات', 'المطالبات الدورية للعقود والمختبر للمختبر', '📋', '#d9b06f'],
-    ['finance2', 'الأمور المالية', 'نظرة سريعة على سير العمل في المختبر', '💼', '#c2d98a'],
-    ['worklist', 'قوائم العمل', 'قوائم طلبات المرضى حسب معايير البحث للمختبر', '📑', '#c39ad9'],
-    ['outbound', 'العينات الصادرة', 'إدارة سير عمل العينات الصادرة إلى المختبرات الأخرى', '📤', '#8ac9c2'],
-    ['reports', 'التقارير', 'سير العمل والتقارير الإحصائية', '📈', '#d97f7f'],
-    ['settings', 'الإعدادات', 'إعدادات المعمل والفروع والنسخ الاحتياطي', '⚙️', '#9aa7c7'],
+    ['reception', 'الاستقبال', 'تسجيل زيارات جديدة وإصدار الفواتير للمرضى', '🧾', '#5bb8a2'],
+    ['results', 'إدخال النتائج', 'استلام النتائج واعتمادها وتتبعها', '📄', '#7aa7d9'],
+    ['dashboard', 'نظرة عامة', 'ملخص يومي لأداء الفرع والإيرادات', '📊', '#8f9fd6'],
+    ['samples', 'تتبع العينات', 'أين وصلت عينات كل زيارة؟', '🧪', '#cbb27a'],
+    ['prices', 'قائمة الأسعار', 'أسعار التحاليل وباقاتها — قابلة للتعديل بالكامل', '🏷️', '#d9a86f'],
+    ['finance', 'الفواتير والتحصيل', 'فواتير الزيارات وتحصيل المدفوعات', '📋', '#c2d98a'],
+    ['finance2', 'الخزينة', 'حركة النقدية ومصروفات الفرع', '💼', '#9fc7d9'],
+    ['worklist', 'قوائم العمل', 'طلبات مرتبة حسب القسم أو التاريخ', '📑', '#c39ad9'],
+    ['outbound', 'عينات خارجية', 'العينات المحوّلة لمختبرات مرجعية', '📤', '#8ac9c2'],
+    ['reports', 'التقارير', 'إحصائيات وملخصات جاهزة للطباعة', '📈', '#d97f7f'],
+    ['users', 'فريق العمل', 'حسابات الموظفين وصلاحياتهم', '👥', '#d98a8a'],
+    ['settings', 'إعدادات الفرع', 'بيانات المعمل والنسخ الاحتياطي', '⚙️', '#9aa7c7'],
   ];
   $('#root').innerHTML = `
   <div class="topbar">
@@ -384,7 +391,8 @@ function recPickPatient(id) {
 function recRenderTests() {
   const q = ($('#rec-test-search')?.value || '').trim();
   const cat = $('#rec-cat')?.value || '';
-  const list = DB.tests.filter(t => (!q || t.name.includes(q)) && (!cat || t.cat === cat));
+  const ql = q.toLowerCase();
+  const list = DB.tests.filter(t => (!q || t.name.toLowerCase().includes(ql)) && (!cat || t.cat === cat));
   $('#rec-test-list').innerHTML = list.map(t => {
     const on = recState.testIds.has(t.id);
     return `<label style="display:inline-flex;align-items:center;gap:6px;margin:4px 6px;padding:7px 14px;border-radius:999px;cursor:pointer;
@@ -741,7 +749,7 @@ function renderDashboard() {
   const todayVisits = DB.visits.filter(v => v.date === today());
   const todayRev = todayVisits.reduce((a, v) => a + visitTotal(v), 0);
   const pend = DB.visits.reduce((a, v) => a + v.tests.filter(t => t.status !== 'done').length, 0);
-  shell('لوحة التحكم', `
+  shell('نظرة عامة', `
   <div class="stats">
     <div class="stat blue"><div class="v">${todayVisits.length}</div><div class="l">زيارات اليوم</div></div>
     <div class="stat gold"><div class="v">${fmt(todayRev)} ج.م</div><div class="l">إيرادات اليوم</div></div>
