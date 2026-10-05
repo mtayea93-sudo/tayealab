@@ -119,11 +119,19 @@ input.cell{width:100%;padding:6px 9px;border:1.5px solid var(--line);border-radi
 
 @media(max-width:800px){.grid2,.grid3,.grid4{grid-template-columns:1fr}}
 @media print{.topbar,.toolbar,.back,.no-print{display:none!important}#view{padding:0}}
-</style>
+.sync-badge{font-size:11px;padding:4px 12px;border-radius:20px;font-weight:700;white-space:nowrap}
+  .sync-badge.on{background:#e3f4f1;color:#0b6e62}
+  .sync-badge.off{background:#eef1f6;color:#8a94a8}
+  .sync-badge.warn{background:#fff3e0;color:#e65100}
+  .sync-badge.err{background:#ffebee;color:#c62828}
+  </style>
 </head>
 <body>
 <div id="root"></div>
-<script src="catalog.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="catalog.js"></script>
+  <script src="cloud.js"></script>
   <script src="treasury.js"></script>
 <script src="app.js"></script>
 <script src="https://m-tayea.mtayea.com/signature/mtayea-signature.js"></script>
