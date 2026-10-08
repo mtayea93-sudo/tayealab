@@ -45,9 +45,9 @@ function seed() {
     tests.push(T('yt_' + tests.length, r.n, r.c, r.p, r.f || []));
   }
   const users = [
-    { id: 'u1', name: 'Mhmd tayea', user: 'mt', pass: 'mozo', role: 'مدير' },
-    { id: 'u2', name: 'أحمد السيد', user: 'ahmed', pass: '123456', role: 'أخصائي' },
-    { id: 'u3', name: 'سارة محمد', user: 'sara', pass: '123456', role: 'استقبال' },
+    { id: 'u1', name: 'Mhmd tayea', user: 'mt', pass: 'mhmd@1993', role: 'مدير' },
+    { id: 'u2', name: 'أحمد السيد', user: 'ahmed', pass: 'mhmd@1993', role: 'أخصائي' },
+    { id: 'u3', name: 'سارة محمد', user: 'sara', pass: 'mhmd@1993', role: 'استقبال' },
   ];
   const patients = [
     { id: 'p1', name: 'محمد عبد الرحمن السيد', age: 38, gender: 'ذكر', phone: '01001234567', code: 'P-0001' },
@@ -73,7 +73,7 @@ let DB = null;
 function loadMeta() {
   try { META = JSON.parse(localStorage.getItem(META_KEY)); } catch (e) { META = null; }
   if (!META || !META.labs) {
-    META = { superUser: { user: 'mt', pass: 'mozo' }, labs: [] };
+    META = { superUser: { user: 'mt', pass: 'mhmd@1993' }, labs: [] };
     // migrate legacy single-lab store into a first lab
     let old = null;
     try { old = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
@@ -83,6 +83,9 @@ function loadMeta() {
       localStorage.setItem(labKey(id), JSON.stringify(old));
     }
     saveMeta();
+  } else if (META.superUser && META.superUser.pass === 'mozo') {
+    /* ترحيل تلقائي: الباسورد القديم بيتحدث لـ mhmd@1993 */
+    META.superUser.pass = 'mhmd@1993'; saveMeta();
   }
 }
 function saveMeta() {
@@ -93,6 +96,10 @@ function loadLab(id) {
   LABID = id;
   try { DB = JSON.parse(localStorage.getItem(labKey(id))); } catch (e) { DB = null; }
   if (!DB || !DB.tests) { DB = seed(); save(); }
+  /* توحيد الباسوردات: أي باسورد قديم بيتحدث لـ mhmd@1993 */
+  let _mig = false;
+  (DB.users || []).forEach(u => { if (u.pass !== 'mhmd@1993') { u.pass = 'mhmd@1993'; _mig = true; } });
+  if (_mig) save();
   if (typeof cloudPullLab === 'function') cloudPullLab(id);
 }
 function save() {
@@ -222,7 +229,7 @@ function loginTab(mode) {
     <div class="field"><label>اسم مستخدم الموزّع</label><input id="lg-user" autocomplete="off"></div>
     <div class="field"><label>كلمة المرور</label><input id="lg-pass" type="password"></div>
     <button class="btn btn-p" onclick="doLogin()">دخول لوحة الموزّع</button>
-    <div class="hint">حساب الموزّع: mt / mozo</div>` : labLoginHtml();
+    <div class="hint">حساب الموزّع: mt / mhmd@1993</div>` : labLoginHtml();
   const p = $('#lg-pass'); if (p) p.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 }
 function labLoginHtml() {
@@ -254,7 +261,7 @@ function labLoginStepHtml(labId) {
     <div class="field"><label>اسم المستخدم</label><input id="lg-user" autocomplete="off"></div>
     <div class="field"><label>كلمة المرور</label><input id="lg-pass" type="password"></div>
     <button class="btn btn-p" onclick="doLogin()">تسجيل الدخول</button>
-    <div class="hint">جرب: ahmed / 123456</div>`;
+    <div class="hint">جرب: ahmed / mhmd@1993</div>`;
 }
 function labBranches(labId) {
   try { const d = JSON.parse(localStorage.getItem(labKey(labId))); if (d?.lab?.branches) return d.lab.branches; } catch (e) {}
